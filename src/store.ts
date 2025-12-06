@@ -31,9 +31,7 @@ export interface GraphState {
   centerPosition?: CenterPositionVector;
   actives?: string[];
   selections?: string[];
-  // The node that is currently hovered, used to disable cluster dragging
   hoveredNodeId?: string;
-  // The edges that are currently hovered over, required for cases when animation is disabled
   hoveredEdgeIds?: string[];
   edgeContextMenus?: Set<string>;
   setEdgeContextMenus: (edges: Set<string>) => void;
@@ -158,80 +156,78 @@ export const createStore = ({
     // Update the position of a cluster with nodes inside it
     setClusterPosition: (id, position) =>
       set(state => {
-        const clusters = new Map<string, InternalGraphNode>(state.clusters);
+        const clusters = new Map<string, ClusterGroup>(state.clusters);
         const cluster = clusters.get(id);
 
-        if (cluster) {
-          // Calculate the offset between old and new position
-          const oldPos = cluster.position;
-          const offset = new Vector3(
-            position.x - oldPos.x,
-            position.y - oldPos.y,
-            position.z - (oldPos.z ?? 0)
-          );
-
-          // Update all nodes in the cluster
-          const nodes: InternalGraphNode[] = [...state.nodes];
-          const drags: DragReferences = { ...state.drags };
-          nodes.forEach((node, index) => {
-            if (node.cluster === id) {
-              nodes[index] = {
-                ...node,
-                position: {
-                  ...node.position,
-                  x: node.position.x + offset.x,
-                  y: node.position.y + offset.y,
-                  z: node.position.z + (offset.z ?? 0)
-                } as InternalGraphPosition
-              };
-              // Update node in drag reference
-              drags[node.id] = node;
-            }
-          });
-
-          const clusterNodes: InternalGraphNode[] = nodes.filter(
-            node => node.cluster === id
-          );
-          const newClusterPosition = getLayoutCenter(clusterNodes);
-          // Update cluster position
-          clusters.set(id, {
-            ...cluster,
-            position: newClusterPosition
-          });
-
-          return {
-            ...state,
-            drags: {
-              ...drags,
-              [id]: cluster
-            },
-            clusters,
-            nodes
-          };
+        if (!cluster) {
+          return state;
         }
 
-        return state;
+        // Calculate the offset between old and new position
+        const oldPos = cluster.position;
+        const offset = new Vector3(
+          position.x - oldPos.x,
+          position.y - oldPos.y,
+          position.z - (oldPos.z ?? 0)
+        );
+
+        // Update all nodes in the cluster
+        const nodes: InternalGraphNode[] = [...state.nodes];
+        const drags: DragReferences = { ...state.drags };
+        
+        nodes.forEach((node, index) => {
+          if (node.cluster === id) {
+            nodes[index] = {
+              ...node,
+              position: {
+                ...node.position,
+                x: node.position.x + offset.x,
+                y: node.position.y + offset.y,
+                z: node.position.z + (offset.z ?? 0)
+              } as InternalGraphPosition
+            };
+            // Update node in drag reference
+            if ('id' in nodes[index]) {
+              drags[node.id] = nodes[index];
+            }
+          }
+        });
+
+        const clusterNodes: InternalGraphNode[] = nodes.filter(
+          node => node.cluster === id
+        );
+        const newClusterPosition = getLayoutCenter(clusterNodes);
+        
+        // Update cluster position and nodes in ClusterGroup
+        clusters.set(id, {
+          ...cluster,
+          position: newClusterPosition,
+          nodes: clusterNodes
+        });
+
+        return {
+          ...state,
+          drags: {
+            ...drags,
+          },
+          clusters,
+          nodes
+        };
       })
   }));
 
+// Create default store
 export const defaultStore = createStore({});
-const StoreContext = isServerRender
-  ? null
-  : createContext<StoreApi<GraphState>>(defaultStore);
 
-export const Provider: FC<{
-  children: ReactNode;
-  store?: StoreApi<GraphState>;
-}> = ({ children, store = defaultStore }) => {
-  if (isServerRender) {
-    return children;
-  }
+// Create a context for the store
+const StoreContext = createContext<StoreApi<GraphState>>(defaultStore);
 
+export const Provider: FC<{ children: ReactNode; store: StoreApi<GraphState> }> = ({ children, store }) => {
   return React.createElement(StoreContext.Provider, { value: store }, children);
 };
 
-export const useStore = <T>(selector: (state: GraphState) => T): T => {
+// Export useStore hook that works with the context
+export function useStore<T>(selector: (state: GraphState) => T): T {
   const store = useContext(StoreContext);
-  // use the useShallow hook, which will return a stable reference (https://zustand.docs.pmnd.rs/migrations/migrating-to-v5)
-  return useZustandStore(store, useShallow(selector));
-};
+  return useZustandStore(store, selector);
+}

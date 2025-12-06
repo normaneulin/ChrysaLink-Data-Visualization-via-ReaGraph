@@ -40,6 +40,11 @@ const panelStyle: React.CSSProperties = {
 const controlsStyle: React.CSSProperties = { padding: 8, background: '#fafafa' };
 
 export const Interactive = () => {
+  // ============ ANIMATION CONFIGURATION ============
+  // Adjust these to control the split animation speed and easing
+  const SPLIT_ANIMATION_DURATION = 1200; // milliseconds for split animation
+  const SPLIT_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)'; // easing function
+  
   // Ring radii for each taxonomic level
   const RING_DIVISION = 280;
   const RING_FAMILY = 200;
@@ -51,6 +56,14 @@ export const Interactive = () => {
   const rightRef = useRef(null);
   // map of computed positions per visible node id (used by layoutOverrides)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  // Track parent node position and which nodes are newly added
+  const expansionInfoRef = useRef<{
+    parentId: string;
+    parentPos: { x: number; y: number };
+    previousNodeIds: Set<string>;
+  } | null>(null);
+  // Track when animation started for smooth transitions
+  const animationStartTimeRef = useRef<number | null>(null);
 
   // Base division-level graphs
   const divisionGraph = useMemo(() => buildDivisionLevel(), []);
@@ -64,6 +77,26 @@ export const Interactive = () => {
   // Current parent (selected taxon) for drill-down on each side
   const [leftParent, setLeftParent] = useState<string | undefined>(undefined);
   const [rightParent, setRightParent] = useState<string | undefined>(undefined);
+  // Track animation progress (0 to 1) to drive transitions
+  const [animationProgress, setAnimationProgress] = useState(1);
+
+  // Animation loop to smoothly transition from 0 to 1
+  React.useEffect(() => {
+    if (animationProgress >= 1) return; // Animation complete
+    
+    const animationFrame = requestAnimationFrame(() => {
+      const elapsed = Date.now() - (animationStartTimeRef.current || Date.now());
+      const progress = Math.min(elapsed / SPLIT_ANIMATION_DURATION, 1);
+      setAnimationProgress(progress);
+      
+      // Stop animation when complete
+      if (progress >= 1) {
+        setAnimationProgress(1);
+      }
+    });
+    
+    return () => cancelAnimationFrame(animationFrame);
+  }, [animationProgress, SPLIT_ANIMATION_DURATION]);
 
   // Search/filter state
   const [leftSearch, setLeftSearch] = useState('');
@@ -73,9 +106,17 @@ export const Interactive = () => {
   // Track the active division per side so deeper drills stay scoped to the clicked division only
   const [leftDivision, setLeftDivision] = useState<string | undefined>(undefined);
   const [rightDivision, setRightDivision] = useState<string | undefined>(undefined);
+  // Track parent expansion info for animation
+  const [expansionParentInfo, setExpansionParentInfo] = useState<{ side: 'left' | 'right'; nodeId: string; pos: { x: number; y: number } } | null>(null);
+
+  // Store previous nodes to identify new children
+  const previousNodesRef = useRef<Set<string>>(new Set());
+  const previousRenderedNodesRef = useRef<Array<any>>([]);
 
   // Combined nodes & edges for a single canvas; nodes are positioned by layoutOverrides
   const combinedNodesEdges = useMemo(() => {
+    // Build the complete node list first, THEN apply animation
+    // This ensures positions are calculated before we apply animation
     function parentLevelOf(level: typeof drillOrder[number]) {
       if (level === 'Family') return 'Division';
       if (level === 'Genus') return 'Family';
@@ -166,6 +207,13 @@ export const Interactive = () => {
     const rterm = rightSearch.trim().toLowerCase();
     const leftFinal = leftNodes.filter(n => (lterm && leftLevel !== 'Division') ? n.label.toLowerCase().includes(lterm) : true);
     const rightFinal = rightNodes.filter(n => (rterm && rightLevel !== 'Division') ? n.label.toLowerCase().includes(rterm) : true);
+
+    // Save parent positions BEFORE we compute final positions (before animation starts)
+    // This happens when we first expand a node
+    if (animationProgress === 0 && (leftStack.length > 0 || rightStack.length > 0)) {
+      // Parent positions are now captured in expansionInfoRef on click
+      // No need to do anything here
+    }
 
     // compute radial positions for nodes (four concentric rings). Assign nodes
     // to rings by their taxonomic level and spread them along their half-circle
@@ -271,8 +319,23 @@ export const Interactive = () => {
     const ringSizes = [100, 80, 50, 20];
     // Lepidoptera nodes: use a bright yellow
     const leftColor = '#FFD700';
-    //const leftColor = '#bb2727ff';
     const rightColor = '#66bb66';
+
+    // Build a set of node IDs that existed in the PREVIOUS render
+    const previousNodeIdSet = new Set<string>(previousRenderedNodesRef.current.map(n => String(n.id)));
+    
+    // Identify which nodes are NEW (don't exist in previous render)
+    const currentNodeIds = new Set<string>([...leftFinal.map(n => String(n.id)), ...rightFinal.map(n => String(n.id))]);
+    const newNodeIds = new Set<string>();
+    currentNodeIds.forEach(id => {
+      if (!previousNodeIdSet.has(id)) {
+        newNodeIds.add(id);
+      }
+    });
+    
+    if (newNodeIds.size > 0 && animationProgress < 1) {
+      console.log(`[MEMO] prevSize=${previousNodeIdSet.size}, curSize=${currentNodeIds.size}, newSize=${newNodeIds.size}, animating=${animationProgress.toFixed(2)}`);
+    }
 
     const annotate = (n: any) => {
       const id = String(n.id);
@@ -280,19 +343,63 @@ export const Interactive = () => {
       const size = ringSizes[ri] || 7;
       const fill = id.startsWith('lep') ? leftColor : rightColor;
       const p = posMap[id];
+      
+      let finalPos = p ? { x: p.x, y: p.y, z: 0 } : n.position;
+      
+      // If animating and this is the parent or a child of the expansion
+      if (animationProgress < 1 && expansionParentInfo) {
+        const side = id.startsWith('lep') ? 'left' : 'right';
+        const isNew = !previousNodeIdSet.has(id);
+        
+        // DEBUG: Log new nodes and animation state
+        if (isNew && animationProgress === 0) {
+          console.log(`[ANIM] New node: ${id}, side: ${side}, targetPos: ${p ? `(${p.x.toFixed(1)}, ${p.y.toFixed(1)})` : 'none'}, parentPos: (${expansionParentInfo.pos.x.toFixed(1)}, ${expansionParentInfo.pos.y.toFixed(1)})`);
+        }
+        
+        // Check if this node is NEW (not in previous render) AND matches the expansion side
+        if (side === expansionParentInfo.side && isNew) {
+          // This is a new child node - animate from parent
+          const easeProgress = 1 - Math.pow(1 - animationProgress, 3); // ease-out cubic
+          const targetPos = p || { x: 0, y: 0 };
+          const parentPos = expansionParentInfo.pos;
+          
+          finalPos = {
+            x: parentPos.x + (targetPos.x - parentPos.x) * easeProgress,
+            y: parentPos.y + (targetPos.y - parentPos.y) * easeProgress,
+            z: 0
+          };
+          
+          // DEBUG: Log animation progress
+          if (animationProgress < 0.5 || animationProgress > 0.9) {
+            console.log(`[ANIM] ${id} @ ${(animationProgress * 100).toFixed(0)}%: (${finalPos.x.toFixed(1)}, ${finalPos.y.toFixed(1)})`);
+          }
+        }
+      }
+      
       return {
         ...n,
         size,
         fill,
-        position: p ? { x: p.x, y: p.y, z: 0 } : n.position
+        position: finalPos
       };
     };
-
+    
+    // Now assign positions to nodes
     const finalLeft = leftFinal.map(annotate);
     const finalRight = rightFinal.map(annotate);
+    
+    // Save all computed positions for the click handlers to use
+    Object.assign(positionsRef.current, posMap);
+    
+    // Save current rendered nodes for next iteration's comparison
+    const allRenderedNodes = [...finalLeft, ...finalRight];
+    previousRenderedNodesRef.current = allRenderedNodes;
+    
+    // Save current nodes for next iteration AFTER we've used them for animation
+    previousNodesRef.current = currentNodeIds;
 
     return { nodes: [...finalLeft, ...finalRight], edges };
-  }, [leftLevel, rightLevel, leftSearch, rightSearch, leftParent, rightParent, leftStack, rightStack, leftDivision, rightDivision, RING_DIVISION, RING_FAMILY, RING_GENUS, RING_SPECIES]);
+  }, [leftLevel, rightLevel, leftSearch, rightSearch, leftParent, rightParent, leftStack, rightStack, leftDivision, rightDivision, RING_DIVISION, RING_FAMILY, RING_GENUS, RING_SPECIES, animationProgress, expansionParentInfo]);
 
   // When a node is clicked on left, expand it (only allow one expanded), or if species clicked, focus right side on connected plants
 
@@ -306,8 +413,28 @@ export const Interactive = () => {
         // Extract the node name from the id
         const parentName = String(id).includes(':') ? String(id).split(':')[1] : String(id);
         
+        // Get parent position from the clicked node object itself
+        const nodePos = node.position || { x: 0, y: 0 };
+        const parentPos = {
+          x: typeof nodePos.x === 'number' ? nodePos.x : 0,
+          y: typeof nodePos.y === 'number' ? nodePos.y : 0
+        };
+        
+        console.log(`[CLICK-L] ${id} @ (${parentPos.x.toFixed(1)}, ${parentPos.y.toFixed(1)}), next level: ${nl}`);
+        
+        // Store expansion info in state so it persists across renders
+        setExpansionParentInfo({
+          side: 'left',
+          nodeId: String(id),
+          pos: parentPos
+        });
+        
         // If clicking a Division, set the division filter
         if (lvl === 'Division') setLeftDivision(parentName);
+        
+        // Trigger animation
+        setAnimationProgress(0);
+        animationStartTimeRef.current = Date.now();
         
         // Add this expansion to the stack
         setLeftStack(prev => [...prev, { level: nl, parent: parentName }]);
@@ -355,8 +482,28 @@ export const Interactive = () => {
       if (nl) {
         const parentName = String(id).includes(':') ? String(id).split(':')[1] : String(id);
         
+        // Get parent position from the clicked node object itself
+        const nodePos = node.position || { x: 0, y: 0 };
+        const parentPos = {
+          x: typeof nodePos.x === 'number' ? nodePos.x : 0,
+          y: typeof nodePos.y === 'number' ? nodePos.y : 0
+        };
+        
+        console.log(`[CLICK-R] ${id} @ (${parentPos.x.toFixed(1)}, ${parentPos.y.toFixed(1)}), next level: ${nl}`);
+        
+        // Store expansion info in state so it persists across renders
+        setExpansionParentInfo({
+          side: 'right',
+          nodeId: String(id),
+          pos: parentPos
+        });
+        
         // If clicking a Division, set the division filter
         if (lvl === 'Division') setRightDivision(parentName);
+        
+        // Trigger animation
+        setAnimationProgress(0);
+        animationStartTimeRef.current = Date.now();
         
         // Add this expansion to the stack
         setRightStack(prev => [...prev, { level: nl, parent: parentName }]);
@@ -580,13 +727,28 @@ export const Interactive = () => {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 600 }}>
-      <div style={{ width: 320, display: 'flex', flexDirection: 'column' }}>
-        <div style={panelStyle}>
-          <div style={controlsStyle}>
-            <div style={{ fontWeight: 600 }}>Lepidoptera</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input placeholder="Search species..." value={leftSearch} onChange={e => setLeftSearch(e.target.value)} style={{ flex: 1 }} />
+    <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 600, flexDirection: 'column' }}>
+      {/* Animation Controls Header */}
+      <div style={{ padding: '8px 12px', background: '#f0f0f0', borderRadius: 4, display: 'flex', gap: 16, alignItems: 'center', fontSize: 12 }}>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span>Split Animation Speed (ms):</span>
+          <input 
+            type="number" 
+            value={SPLIT_ANIMATION_DURATION} 
+            readOnly
+            style={{ width: 60, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 3 }} 
+          />
+        </label>
+        <div style={{ color: '#666' }}>← Change SPLIT_ANIMATION_DURATION at top of code</div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flex: 1 }}>
+        <div style={{ width: 320, display: 'flex', flexDirection: 'column' }}>
+          <div style={panelStyle}>
+            <div style={controlsStyle}>
+              <div style={{ fontWeight: 600 }}>Lepidoptera</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input placeholder="Search species..." value={leftSearch} onChange={e => setLeftSearch(e.target.value)} style={{ flex: 1 }} />
               <select value={leftLevel} onChange={e => setLeftLevel(e.target.value as any)}>
                 <option>Division</option>
                 <option>Family</option>
@@ -723,6 +885,7 @@ export const Interactive = () => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
