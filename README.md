@@ -1,140 +1,46 @@
-<div align="center">
-  <img width="650" src="stories/assets/logo-light.png">
-  <br />
-  <br />
-  WebGL Network Graphs for React
-  <br /><br />
-  <a href="https://github.com/reaviz/reagraph/workflows/build/" target="_blank">
-    <img src="https://github.com/reaviz/reagraph/workflows/build/badge.svg?branch=master" />
-  </a>
-  <a href="https://npm.im/reagraph" target="_blank">
-    <img src="https://img.shields.io/npm/v/reagraph.svg" />
-  </a>
-  <a href="https://npm.im/reagraph" target="_blank">
-    <img src="https://badgen.net/npm/dw/reagraph" />
-  </a>
-  <a href="https://github.com/reaviz/reagraph/blob/master/LICENSE" target="_blank">
-    <img src="https://badgen.now.sh/badge/license/apache2" />
-  </a>
-  <a href="https://discord.gg/tt8wGExq35" target="_blank">
-    <img src="https://img.shields.io/discord/773948315037073409?label=discord">
-  </a>
-  <a href="https://opencollective.com/reaviz" target="_blank">
-    <img alt="Open Collective backers and sponsors" src="https://img.shields.io/opencollective/all/reaviz?label=backers">
-  </a>
-</div>
+# ChrysaLink - Data Visualization via ReaGraph
 
----
+Interactive data visualization for Lepidoptera-Plant host relationships using ReaGraph.
 
-Reagraph is a high-performance network graph visualization built in WebGL for React.
+## 📋 About
 
-## 🚀 Quick Links
-
-- Checkout the [**docs and demos**](https://reagraph.dev)
-- Checkout a basic demo on [CodeSandbox](https://codesandbox.io/s/reagraph-example-mwh96q)
-- Learn about updates from the [changelog](CHANGELOG.md)
-- Grab the design file for the docs in [Figma](https://www.figma.com/community/file/1524029217670772128/reagraph-landing-page)
-- Improve the docs on [Github](https://github.com/reaviz/reagraph-website)
-
-## 💎 Other Projects
-
-- [Reaflow](https://reaflow.dev?utm=reagraph) - Open-source library for workflow and diagram graphs.
-- [Reablocks](https://reablocks.dev?utm=reagraph) - Open-source component library for React based on Tailwind.
-- [Reaviz](https://reaviz.dev?utm=reagraph) - Open-source library for data visualizations for React. 
-- [Reachat](https://reachat.dev?utm=reagraph) - Open-source library for building LLM/Chat UIs for React.
+This project visualizes the complex relationships between Lepidoptera (butterflies and moths) and their host plants. Built on top of [ReaGraph](https://github.com/reaviz/reagraph), it provides an interactive hierarchical exploration of taxonomic data.
 
 ## ✨ Features
-- WebGL based for high performance
-- Node Sizing based on attribute, page rank, centrality, custom
-- Light and Dark Mode with custom theme ability
-- Path finding between nodes
-- Radial Context Menu
-- Highlight and Selection Hook
-- Dragging Nodes
-- Lasso Selection
-- Expand/Collapse Nodes
-- Customizable Nodes
-- Advanced Label Placement
-- Edge Interpolation and Styling
-- Clustering
-- Edge Bundling
-- Node Badges
 
-with the following built in layouts:
+- **Interactive Hierarchical Drill-Down**: Click on taxonomic divisions to explore families, genera, and species
+- **Radial Layout**: Concentric rings representing different taxonomic levels (Division → Family → Genus → Species)
+- **Independent Left-Right Navigation**: Explore Lepidoptera and Plant data independently
+- **Strict Expansion Rules**: Only clicked nodes expand, maintaining clear visual hierarchy
+- **WebGL Performance**: Built on ReaGraph's high-performance WebGL rendering
 
-- Force Directed 2D
-- Force Directed 3D
-- Circular 2D
-- Tree Top Down 2D
-- Tree Left Right 2D
-- Tree Top Down 3D
-- Tree Left Right 3D
-- Radial Out 2D
-- Radial Out 3D
-- Hierarchical Top Down 2D
-- Hierarchical Left Right 2D
-- No Overlap 2D
-- Force Atlas2 2D
-- Concentric 2D
-- Concentric 3D
+## 🎯 Built With
 
-## 📦 Usage
+- [ReaGraph](https://reagraph.dev) - High-performance network graph visualization
+- React + TypeScript
+- Storybook for development
 
-Install the package via **NPM**:
 
-```
-npm i reagraph --save
+## 📦 Development
+
+To run the project locally:
+
+```bash
+npm install
+npm run storybook
 ```
 
-Install the package via **Yarn**:
+The Storybook development server will start at http://localhost:6006
 
-```
-yarn add reagraph
-```
+## 🎨 Demo
 
-Import the component into your app and add some nodes and edges:
+Navigate to the **Lepidoptera Host Plants** story to see the interactive visualization.
 
-```tsx
-import React from 'react';
-import { GraphCanvas } from 'reagraph';
+## 📝 License
 
-export default () => (
-  <GraphCanvas
-    nodes={[
-      {
-        id: 'n-1',
-        label: '1'
-      },
-      {
-        id: 'n-2',
-        label: '2'
-      }
-    ]}
-    edges={[
-      {
-        id: '1->2',
-        source: 'n-1',
-        target: 'n-2',
-        label: 'Edge 1-2'
-      }
-    ]}
-  />
-);
-```
+This project is built on top of [ReaGraph](https://github.com/reaviz/reagraph), which is licensed under Apache 2.0.
 
-Checkout an example on [CodeSandbox](https://codesandbox.io/s/reagraph-example-mwh96q).
+## 🙏 Credits
 
-## 🔭 Development
-
-If you want to run reagraph locally, its super easy!
-
-- Clone the repo
-- `npm i`
-- `npm start`
-- Browser opens to Storybook page
-
-## ❤️ Contributors
-
-Thanks to all our contributors!
-
-<a href="https://github.com/reaviz/reaviz/graphs/contributors"><img src="https://opencollective.com/reaviz/contributors.svg?width=890" /></a>
+- **ReaGraph**: Original graph visualization library by [reaviz](https://github.com/reaviz/reagraph)
+- **Data**: Lepidoptera-Plant host relationship data
