@@ -158,7 +158,7 @@ export const createStore = ({
     // Update the position of a cluster with nodes inside it
     setClusterPosition: (id, position) =>
       set(state => {
-        const clusters = new Map<string, any>(state.clusters);
+        const clusters = new Map<string, InternalGraphNode>(state.clusters);
         const cluster = clusters.get(id);
 
         if (cluster) {
