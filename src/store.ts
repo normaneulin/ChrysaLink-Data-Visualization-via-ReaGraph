@@ -214,7 +214,7 @@ export const createStore = ({
       })
   }));
 
-const defaultStore = createStore({});
+export const defaultStore = createStore({});
 const StoreContext = isServerRender
   ? null
   : createContext<StoreApi<GraphState>>(defaultStore);

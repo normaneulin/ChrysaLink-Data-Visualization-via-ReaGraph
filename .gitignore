@@ -69,3 +69,5 @@ src/**/*.css.d.ts
 
 # IDE
 .idea
+
+*storybook.log
